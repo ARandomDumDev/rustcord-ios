@@ -7,12 +7,14 @@ text-only rows, network/JSON off the main thread.
 `.github/workflows/ios.yml` runs on macOS: builds the Rust static libs, generates `rustcord.h` with
 cbindgen, generates the Xcode project from `ios/project.yml` (xcodegen), builds for the simulator and
 uploads an **unsigned** `.ipa` artifact. To install on a device, sign it (e.g. with your Apple ID via
-Sideloadly/AltStore). The workflow has not been run yet.
+Sideloadly/AltStore).
 
 ## Signing in
-- **Sign in with Discord** (OAuth2): set `OAuth.clientId` in `Rustcord/OAuth.swift` and add `rustcord://oauth`
-  as a redirect URI in the Discord developer portal. Discord only grants OAuth user tokens identity and
-  server-list access (`identify guilds`), so chat is not available this way.
+- **Sign in with Discord** (OAuth2): add the repository Actions variable `DISCORD_CLIENT_ID` with your
+  Discord application ID. In Developer Portal → OAuth2 → Redirects, register the exact URI
+  `discord-<application-id>:/authorize/callback`. The build embeds the matching URL scheme and uses
+  the authorization-code flow with PKCE. Discord OAuth grants identity and server-list access only;
+  personal-account chat is not available through this client.
 - **Bot token**: full chat (read/send/live events). Enable the "Message Content" intent.
-- Logging in with a regular user account token is deliberately not supported: Discord prohibits it
-  (self-botting) and it risks account bans.
+- The app never asks for Discord email/password credentials; Discord handles sign-in in its own web
+  authorization page.

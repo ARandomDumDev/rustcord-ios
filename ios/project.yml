@@ -15,11 +15,14 @@ targets:
       properties:
         CFBundleDisplayName: Rustcord
         UILaunchScreen: {}
+        DiscordClientID: $(DISCORD_CLIENT_ID)
         CFBundleURLTypes:
-          - CFBundleURLSchemes: [rustcord]
+          - CFBundleURLSchemes: [discord-$(DISCORD_CLIENT_ID)]
+            CFBundleURLName: Discord OAuth
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: dev.rustcord.app
+        DISCORD_CLIENT_ID: ""
         SWIFT_OBJC_BRIDGING_HEADER: Rustcord-Bridging-Header.h
         HEADER_SEARCH_PATHS: $(SRCROOT)
         OTHER_LDFLAGS: [-lrustcord, -lresolv]

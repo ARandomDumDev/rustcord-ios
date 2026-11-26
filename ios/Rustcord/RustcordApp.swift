@@ -27,8 +27,8 @@ final class Store: ObservableObject {
         } catch { self.error = "\(error)" }
     }
 
-    func loginWithDiscord(clientId: String) async {
-        do { await login(try await OAuth.signIn(clientId: clientId), isOAuth: true) }
+    func loginWithDiscord() async {
+        do { await login(try await OAuth.signIn(clientId: OAuth.clientId), isOAuth: true) }
         catch { self.error = "\(error)" }
     }
 
@@ -57,20 +57,16 @@ final class Store: ObservableObject {
 struct RustcordApp: App {
     @StateObject private var store = Store()
     @State private var token = ""
-    @State private var clientId = ""
 
     var body: some Scene {
         WindowGroup {
             if store.api == nil {
                 Form {
                     Section("Personal Discord account") {
-                        TextField("Discord application ID", text: $clientId)
-                            .textInputAutocapitalization(.never)
-                            .autocorrectionDisabled()
                         Button("Sign in with Discord") {
-                            Task { await store.loginWithDiscord(clientId: clientId) }
+                            Task { await store.loginWithDiscord() }
                         }
-                        Text("Discord opens its own sign-in page. This app never receives your email or password. Personal accounts can view your profile and server list; Discord does not permit third-party clients to read or send personal-account messages.")
+                        Text("Configure DISCORD_CLIENT_ID as a GitHub Actions variable and register discord-<application ID>:/authorize/callback in the Discord Developer Portal. Discord opens its own sign-in page; this app never receives your password. Personal accounts can view their profile and server list, but cannot use personal-account chat here.")
                             .font(.footnote)
                             .foregroundStyle(.secondary)
                     }
