@@ -8,16 +8,18 @@ final class Store: ObservableObject {
     @Published var channels: [Channel] = []
     @Published var messages: [Message] = []
     @Published var error: String?
+    @Published var isOAuthAccount = false
     var api: Discord?
     var openChannel: String?
 
-    func login(_ token: String) async {
+    func login(_ token: String, isOAuth: Bool = false) async {
         let d = Discord(token: token)
         do {
             _ = try await d.me()
             api = d
+            isOAuthAccount = isOAuth
             guilds = try await d.guilds()
-            if !token.hasPrefix("Bearer ") {
+            if !isOAuth {
                 d.listen { [weak self] m in
                     Task { @MainActor in self?.receive(m) }
                 }
@@ -25,8 +27,9 @@ final class Store: ObservableObject {
         } catch { self.error = "\(error)" }
     }
 
-    func loginWithDiscord() async {
-        do { await login(try await OAuth.signIn()) } catch { self.error = "\(error)" }
+    func loginWithDiscord(clientId: String) async {
+        do { await login(try await OAuth.signIn(clientId: clientId), isOAuth: true) }
+        catch { self.error = "\(error)" }
     }
 
     func openGuild(_ g: Guild) async {
@@ -54,18 +57,59 @@ final class Store: ObservableObject {
 struct RustcordApp: App {
     @StateObject private var store = Store()
     @State private var token = ""
+    @State private var clientId = ""
 
     var body: some Scene {
         WindowGroup {
             if store.api == nil {
                 Form {
-                    Button("Sign in with Discord") { Task { await store.loginWithDiscord() } }
+                    Section("Personal Discord account") {
+                        TextField("Discord application ID", text: $clientId)
+                            .textInputAutocapitalization(.never)
+                            .autocorrectionDisabled()
+                        Button("Sign in with Discord") {
+                            Task { await store.loginWithDiscord(clientId: clientId) }
+                        }
+                        Text("Discord opens its own sign-in page. This app never receives your email or password. Personal accounts can view your profile and server list; Discord does not permit third-party clients to read or send personal-account messages.")
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                    }
+                    Section("Bot account") {
                     SecureField("Or bot token", text: $token)
                     Button("Sign in") { Task { await store.login(token) } }
+                    }
                     if let e = store.error { Text(e).foregroundStyle(.red) }
                 }
             } else {
-                RootView().environmentObject(store)
+                Group {
+                    if store.isOAuthAccount {
+                        PersonalAccountView()
+                    } else {
+                        RootView()
+                    }
+                }
+                .environmentObject(store)
+            }
+        }
+    }
+}
+
+struct PersonalAccountView: View {
+    @EnvironmentObject var store: Store
+
+    var body: some View {
+        NavigationStack {
+            List(store.guilds) { guild in
+                Text(guild.name)
+            }
+            .navigationTitle("Your servers")
+            .safeAreaInset(edge: .bottom) {
+                Text("Signed in with Discord. Personal-account chat is not available to third-party apps.")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity)
+                    .padding()
+                    .background(.bar)
             }
         }
     }

@@ -1,14 +1,12 @@
 import AuthenticationServices
 import UIKit
 
-/// "Sign in with Discord" via OAuth2 implicit grant (opens Discord's own login page,
-/// so the app never sees the user's password). Set `clientId` to your application's ID and add
-/// `rustcord://oauth` as a redirect URI in the Discord developer portal.
+/// Opens Discord's hosted authorization page. The app never receives the account password.
+/// Register `rustcord://oauth` as a redirect URI for the application ID.
 ///
 /// Discord's API gives OAuth user tokens identity and server-list access only; reading or sending
 /// messages as a user is not permitted for third-party apps, so that requires a bot token.
 enum OAuth {
-    static let clientId = "YOUR_DISCORD_APPLICATION_ID"
     static let redirect = "rustcord://oauth"
 
     private final class Anchor: NSObject, ASWebAuthenticationPresentationContextProviding {
@@ -20,13 +18,18 @@ enum OAuth {
     private static let anchor = Anchor()
 
     @MainActor
-    static func signIn() async throws -> String {
+    static func signIn(clientId: String) async throws -> String {
+        guard !clientId.isEmpty else {
+            throw RustcordError(error: "Enter your Discord application ID first.")
+        }
+        let state = UUID().uuidString
         var c = URLComponents(string: "https://discord.com/oauth2/authorize")!
         c.queryItems = [
             .init(name: "client_id", value: clientId),
             .init(name: "response_type", value: "token"),
             .init(name: "redirect_uri", value: redirect),
             .init(name: "scope", value: "identify guilds"),
+            .init(name: "state", value: state),
         ]
         return try await withCheckedThrowingContinuation { cont in
             let session = ASWebAuthenticationSession(url: c.url!, callbackURLScheme: "rustcord") { url, err in
@@ -35,6 +38,9 @@ enum OAuth {
                 }
                 var comps = URLComponents()
                 comps.query = frag
+                guard comps.queryItems?.first(where: { $0.name == "state" })?.value == state else {
+                    return cont.resume(throwing: RustcordError(error: "OAuth state validation failed."))
+                }
                 if let t = comps.queryItems?.first(where: { $0.name == "access_token" })?.value {
                     cont.resume(returning: "Bearer " + t)
                 } else {
