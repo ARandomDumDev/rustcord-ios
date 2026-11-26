@@ -17,6 +17,7 @@ targets:
         UILaunchScreen: {}
         CFBundleURLTypes:
           - CFBundleURLSchemes: [rustcord]
+            CFBundleURLName: Discord OAuth
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: dev.rustcord.app
