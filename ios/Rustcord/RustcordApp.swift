@@ -40,7 +40,7 @@ final class Store: ObservableObject {
         do {
             channels = try await api.channels(g.id).filter { [0, 5, 10, 11, 12].contains($0.type) }
             error = nil
-        } catch { error = "\(error)" }
+        } catch { self.error = "\(error)" }
     }
 
     func open(_ c: Channel) async {
@@ -52,7 +52,7 @@ final class Store: ObservableObject {
         do {
             messages = Array(try await api.messages(c.id).reversed())
             error = nil
-        } catch { error = "\(error)" }
+        } catch { self.error = "\(error)" }
     }
 
     func send(_ text: String) async {
@@ -60,7 +60,7 @@ final class Store: ObservableObject {
         do {
             _ = try await api.send(c, text)
             error = nil
-        } catch { error = "\(error)" }
+        } catch { self.error = "\(error)" }
     }
 
     func createDM(recipientID: String) async throws -> Channel {
@@ -203,7 +203,7 @@ struct DirectMessageStartView: View {
                     do {
                         openedChannel = try await store.createDM(recipientID: recipientID)
                         error = nil
-                    } catch { error = "\(error)" }
+                    } catch { self.error = "\(error)" }
                 }
             }
             .disabled(recipientID.isEmpty || isOpening)
