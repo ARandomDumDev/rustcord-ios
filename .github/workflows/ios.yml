@@ -1,0 +1,54 @@
+name: iOS
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-ios,aarch64-apple-ios-sim
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Install tools
+        run: brew install xcodegen && cargo install cbindgen --locked
+
+      - name: Build Rust core (simulator + device)
+        run: |
+          cargo build --release --target aarch64-apple-ios-sim
+          cargo build --release --target aarch64-apple-ios
+
+      - name: Generate C header
+        run: cbindgen --lang c --crate rustcord --output ios/rustcord.h
+
+      - name: Generate Xcode project
+        run: cd ios && xcodegen generate
+
+      - name: Build app for simulator
+        run: |
+          xcodebuild -project ios/Rustcord.xcodeproj -scheme Rustcord \
+            -sdk iphonesimulator -configuration Release \
+            -destination 'generic/platform=iOS Simulator' \
+            CODE_SIGNING_ALLOWED=NO build
+
+      - name: Build unsigned device .app and package as .ipa
+        run: |
+          xcodebuild -project ios/Rustcord.xcodeproj -scheme Rustcord \
+            -sdk iphoneos -configuration Release \
+            -derivedDataPath build \
+            LIBRARY_SEARCH_PATHS="$PWD/target/aarch64-apple-ios/release" \
+            CODE_SIGNING_ALLOWED=NO build
+          mkdir Payload && cp -R build/Build/Products/Release-iphoneos/Rustcord.app Payload/
+          zip -qr Rustcord-unsigned.ipa Payload
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Rustcord-unsigned-ipa
+          path: Rustcord-unsigned.ipa
