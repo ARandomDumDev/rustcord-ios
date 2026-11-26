@@ -124,17 +124,17 @@ struct RustcordApp: App {
                 .environmentObject(store)
             }
         }
+    }
 
-        private var botInviteURL: URL? {
-            guard !clientId.isEmpty else { return nil }
-            var components = URLComponents(string: "https://discord.com/oauth2/authorize")
-            components?.queryItems = [
-                .init(name: "client_id", value: clientId),
-                .init(name: "scope", value: "bot"),
-                .init(name: "permissions", value: "68608"),
-            ]
-            return components?.url
-        }
+    private var botInviteURL: URL? {
+        guard !clientId.isEmpty else { return nil }
+        var components = URLComponents(string: "https://discord.com/oauth2/authorize")
+        components?.queryItems = [
+            .init(name: "client_id", value: clientId),
+            .init(name: "scope", value: "bot"),
+            .init(name: "permissions", value: "68608"),
+        ]
+        return components?.url
     }
 }
 
