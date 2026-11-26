@@ -10,11 +10,10 @@ uploads an **unsigned** `.ipa` artifact. To install on a device, sign it (e.g. w
 Sideloadly/AltStore).
 
 ## Signing in
-- **Sign in with Discord** (OAuth2): add the repository Actions variable `DISCORD_CLIENT_ID` with your
-  Discord application ID. In Developer Portal → OAuth2 → Redirects, register the exact URI
-  `discord-<application-id>:/authorize/callback`. The build embeds the matching URL scheme and uses
-  the authorization-code flow with PKCE. Discord OAuth grants identity and server-list access only;
-  personal-account chat is not available through this client.
+- **Sign in with Discord** (OAuth2): enter your Discord application ID. In Developer Portal → OAuth2
+  → Redirects, register the exact URI `rustcord://oauth`. The app uses the authorization-code flow
+  with PKCE. Discord OAuth grants identity and server-list access only; personal-account chat is not
+  available through this client.
 - **Bot token**: full chat (read/send/live events). Enable the "Message Content" intent.
 - The app never asks for Discord email/password credentials; Discord handles sign-in in its own web
   authorization page.

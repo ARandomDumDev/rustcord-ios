@@ -5,7 +5,7 @@ import UIKit
 
 /// Opens Discord's hosted authorization page. The app never receives account passwords.
 enum OAuth {
-    static let clientId = Bundle.main.object(forInfoDictionaryKey: "DiscordClientID") as? String ?? ""
+    static let redirect = "rustcord://oauth"
 
     private final class Anchor: NSObject, ASWebAuthenticationPresentationContextProviding {
         func presentationAnchor(for session: ASWebAuthenticationSession) -> ASPresentationAnchor {
@@ -18,10 +18,9 @@ enum OAuth {
 
     @MainActor
     static func signIn(clientId: String) async throws -> String {
-        guard !clientId.isEmpty, !clientId.contains("$(") else {
-            throw RustcordError(error: "Set the DISCORD_CLIENT_ID build setting to your Discord application ID.")
+        guard !clientId.isEmpty else {
+            throw RustcordError(error: "Enter your Discord application ID.")
         }
-        let redirect = "discord-\(clientId):/authorize/callback"
         let state = UUID().uuidString
         let verifier = try codeVerifier()
         var c = URLComponents(string: "https://discord.com/oauth2/authorize")!
@@ -35,8 +34,7 @@ enum OAuth {
             .init(name: "code_challenge_method", value: "S256"),
         ]
         return try await withCheckedThrowingContinuation { cont in
-            let callbackScheme = "discord-\(clientId)"
-            let session = ASWebAuthenticationSession(url: c.url!, callbackURLScheme: callbackScheme) { url, err in
+            let session = ASWebAuthenticationSession(url: c.url!, callbackURLScheme: "rustcord") { url, err in
                 Task { @MainActor in
                     Self.activeSession = nil
                     guard let url else {
