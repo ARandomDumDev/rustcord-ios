@@ -33,17 +33,39 @@ final class Store: ObservableObject {
     }
 
     func openGuild(_ g: Guild) async {
-        channels = ((try? await api?.channels(g.id)) ?? []).filter { $0.type == 0 }
+        guard let api else {
+            error = "Sign in with a bot token first."
+            return
+        }
+        do {
+            channels = try await api.channels(g.id).filter { [0, 5, 10, 11, 12].contains($0.type) }
+            error = nil
+        } catch { self.error = "\(error)" }
     }
 
     func open(_ c: Channel) async {
+        guard let api else {
+            error = "Sign in with a bot token first."
+            return
+        }
         openChannel = c.id
-        messages = ((try? await api?.messages(c.id)) ?? []).reversed()
+        do {
+            messages = Array(try await api.messages(c.id).reversed())
+            error = nil
+        } catch { self.error = "\(error)" }
     }
 
     func send(_ text: String) async {
-        guard let c = openChannel, !text.isEmpty else { return }
-        _ = try? await api?.send(c, text)
+        guard let api, let c = openChannel, !text.isEmpty else { return }
+        do {
+            _ = try await api.send(c, text)
+            error = nil
+        } catch { self.error = "\(error)" }
+    }
+
+    func createDM(recipientID: String) async throws -> Channel {
+        guard let api else { throw RustcordError(error: "Sign in with a bot token first.") }
+        return try await api.createDM(recipientID: recipientID)
     }
 
     private func receive(_ m: Message) {
@@ -63,20 +85,31 @@ struct RustcordApp: App {
         WindowGroup {
             if store.api == nil {
                 Form {
-                    Section("Personal Discord account") {
+                    Section("1. Create and configure a bot") {
+                        Link("Open Discord Developer Portal",
+                             destination: URL(string: "https://discord.com/developers/applications")!)
+                        Text("Create an application, open its Bot page, and reset/copy the bot token. Under Bot → Privileged Gateway Intents, enable Message Content Intent.")
+                    }
+                    Section("2. Invite the bot to your server") {
                         TextField("Discord application ID", text: $clientId)
                             .textInputAutocapitalization(.never)
                             .autocorrectionDisabled()
+                        if let url = botInviteURL {
+                            Link("Generate bot invite", destination: url)
+                        }
+                        Text("Grant View Channels, Read Message History, and Send Messages. The bot must share the server and have channel access.")
+                    }
+                    Section("3. Connect") {
+                        SecureField("Bot token", text: $token)
+                        Button("Connect bot") { Task { await store.login(token) } }
+                    }
+                    Section("Personal Discord account") {
                         Button("Sign in with Discord") {
                             Task { await store.loginWithDiscord(clientId: clientId) }
                         }
                         Text("In the Discord Developer Portal, register this exact OAuth redirect URI: \(OAuth.redirect). Discord opens its own sign-in page; this app never receives your password. Personal accounts can view their profile and server list, but cannot use personal-account chat here.")
                             .font(.footnote)
                             .foregroundStyle(.secondary)
-                    }
-                    Section("Bot account") {
-                    SecureField("Or bot token", text: $token)
-                    Button("Sign in") { Task { await store.login(token) } }
                     }
                     if let e = store.error { Text(e).foregroundStyle(.red) }
                 }
@@ -91,6 +124,17 @@ struct RustcordApp: App {
                 .environmentObject(store)
             }
         }
+    }
+
+    private var botInviteURL: URL? {
+        guard !clientId.isEmpty else { return nil }
+        var components = URLComponents(string: "https://discord.com/oauth2/authorize")
+        components?.queryItems = [
+            .init(name: "client_id", value: clientId),
+            .init(name: "scope", value: "bot"),
+            .init(name: "permissions", value: "68608"),
+        ]
+        return components?.url
     }
 }
 
@@ -120,11 +164,53 @@ struct RootView: View {
 
     var body: some View {
         NavigationStack {
-            List(store.guilds) { g in
-                NavigationLink(g.name) { ChannelList(guild: g) }
+            List {
+                Section("Servers") {
+                    ForEach(store.guilds) { g in
+                        NavigationLink(g.name) { ChannelList(guild: g) }
+                    }
+                }
+                Section("Direct messages") {
+                    NavigationLink("Open a DM by user ID") { DirectMessageStartView() }
+                    Text("Bots cannot list your personal DM inbox or access group DMs. Start a bot DM with a user ID instead.")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                }
             }
-            .navigationTitle("Servers")
+            .navigationTitle("Discord")
         }
+    }
+}
+
+struct DirectMessageStartView: View {
+    @EnvironmentObject var store: Store
+    @State private var recipientID = ""
+    @State private var openedChannel: Channel?
+    @State private var error: String?
+    @State private var isOpening = false
+
+    var body: some View {
+        Form {
+            TextField("Recipient's Discord user ID", text: $recipientID)
+                .keyboardType(.numberPad)
+            Text("This opens a one-to-one DM with the bot. The recipient must be reachable by the bot; existing personal-account DMs and group chats are not available.")
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+            Button(isOpening ? "Opening…" : "Open DM") {
+                Task {
+                    isOpening = true
+                    defer { isOpening = false }
+                    do {
+                        openedChannel = try await store.createDM(recipientID: recipientID)
+                        error = nil
+                    } catch { self.error = "\(error)" }
+                }
+            }
+            .disabled(recipientID.isEmpty || isOpening)
+            if let error { Text(error).foregroundStyle(.red) }
+        }
+        .navigationTitle("Start a DM")
+        .navigationDestination(item: $openedChannel) { ChatView(channel: $0) }
     }
 }
 
@@ -133,8 +219,13 @@ struct ChannelList: View {
     let guild: Guild
 
     var body: some View {
-        List(store.channels) { c in
-            NavigationLink("# \(c.name ?? "")") { ChatView(channel: c) }
+        List {
+            if let error = store.error {
+                Text(error).foregroundStyle(.red)
+            }
+            ForEach(store.channels) { c in
+                NavigationLink("# \(c.name ?? "channel")") { ChatView(channel: c) }
+            }
         }
         .navigationTitle(guild.name)
         .task { await store.openGuild(guild) }
@@ -148,6 +239,9 @@ struct ChatView: View {
 
     var body: some View {
         VStack(spacing: 0) {
+            if let error = store.error {
+                Text(error).font(.footnote).foregroundStyle(.red).padding(.horizontal)
+            }
             ScrollViewReader { proxy in
                 ScrollView {
                     LazyVStack(alignment: .leading, spacing: 8) {
@@ -169,7 +263,7 @@ struct ChatView: View {
             }
             .padding(8)
         }
-        .navigationTitle("# \(channel.name ?? "")")
+        .navigationTitle(channel.type == 1 ? "Direct Message" : "# \(channel.name ?? "")")
         .navigationBarTitleDisplayMode(.inline)
         .task { await store.open(channel) }
     }

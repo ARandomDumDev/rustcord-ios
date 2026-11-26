@@ -44,6 +44,9 @@ final class Discord: @unchecked Sendable {
     func me() async throws -> User { try await call { rustcord_current_user($0) } }
     func guilds() async throws -> [Guild] { try await call { rustcord_guilds($0) } }
     func channels(_ g: String) async throws -> [Channel] { try await call { rustcord_guild_channels($0, g) } }
+    func createDM(recipientID: String) async throws -> Channel {
+        try await call { rustcord_create_dm($0, recipientID) }
+    }
     func messages(_ c: String) async throws -> [Message] { try await call { rustcord_messages($0, c, 50) } }
     func send(_ c: String, _ text: String) async throws -> Message { try await call { rustcord_send_message($0, c, text) } }
 

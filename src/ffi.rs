@@ -70,6 +70,12 @@ pub extern "C" fn rustcord_guild_channels(c: *const RustcordClient, guild_id: *c
 }
 
 #[no_mangle]
+pub extern "C" fn rustcord_create_dm(c: *const RustcordClient, recipient_id: *const c_char) -> *mut c_char {
+    let c = unsafe { &*c };
+    json_result(rt().block_on(c.0.create_dm(&arg(recipient_id))))
+}
+
+#[no_mangle]
 pub extern "C" fn rustcord_messages(c: *const RustcordClient, channel_id: *const c_char, limit: u8) -> *mut c_char {
     let c = unsafe { &*c };
     json_result(rt().block_on(c.0.messages(&arg(channel_id), limit)))

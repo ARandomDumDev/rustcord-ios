@@ -54,6 +54,17 @@ impl HttpClient {
         self.get(&format!("/guilds/{guild_id}/channels")).await
     }
 
+    pub async fn create_dm(&self, recipient_id: &str) -> Result<Channel, Error> {
+        let resp = self
+            .client
+            .post(format!("{API}/users/@me/channels"))
+            .header("Authorization", self.auth())
+            .json(&serde_json::json!({ "recipient_id": recipient_id }))
+            .send()
+            .await?;
+        Self::parse(resp).await
+    }
+
     pub async fn messages(&self, channel_id: &str, limit: u8) -> Result<Vec<Message>, Error> {
         self.get(&format!("/channels/{channel_id}/messages?limit={}", limit.clamp(1, 100))).await
     }
