@@ -9,6 +9,8 @@ pub use http::HttpClient;
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
+    #[error("invalid input: {0}")]
+    InvalidInput(String),
     #[error("http error: {0}")]
     Http(#[from] reqwest::Error),
     #[error("websocket error: {0}")]

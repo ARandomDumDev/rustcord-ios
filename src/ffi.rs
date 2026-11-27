@@ -92,6 +92,17 @@ pub extern "C" fn rustcord_messages(
 }
 
 #[no_mangle]
+pub extern "C" fn rustcord_messages_before(
+    c: *const RustcordClient,
+    channel_id: *const c_char,
+    before: *const c_char,
+    limit: u8,
+) -> *mut c_char {
+    let c = unsafe { &*c };
+    json_result(rt().block_on(c.0.messages_before(&arg(channel_id), &arg(before), limit)))
+}
+
+#[no_mangle]
 pub extern "C" fn rustcord_send_message(
     c: *const RustcordClient,
     channel_id: *const c_char,

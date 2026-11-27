@@ -5,14 +5,17 @@ import UIKit
 /// Keeps only the newest `limit` messages per open channel, so memory stays flat.
 @MainActor
 final class Store: ObservableObject {
-    static let limit = 100
+    static let maxHistory = 500
     @Published var guilds: [Guild] = []
     @Published var channels: [Channel] = []
     @Published var messages: [Message] = []
     @Published var error: String?
     @Published var isOAuthAccount = false
+    @Published var canLoadOlderMessages = false
+    @Published var isLoadingOlderMessages = false
     var api: Discord?
     var openChannel: String?
+    private let pageSize = 50
 
     func login(_ token: String, isOAuth: Bool = false) async {
         let d = Discord(token: token)
@@ -52,7 +55,27 @@ final class Store: ObservableObject {
         }
         openChannel = c.id
         do {
-            messages = Array(try await api.messages(c.id).reversed())
+            let page = try await api.messages(c.id)
+            messages = Array(page.reversed())
+            canLoadOlderMessages = page.count == pageSize
+            error = nil
+        } catch { self.error = "\(error)" }
+    }
+
+    func loadOlderMessages() async {
+        guard let api, let channel = openChannel, let cursor = messages.first?.id,
+              canLoadOlderMessages, !isLoadingOlderMessages else { return }
+        isLoadingOlderMessages = true
+        defer { isLoadingOlderMessages = false }
+        do {
+            let page = try await api.messages(channel, before: cursor)
+            let existing = Set(messages.map(\.id))
+            let older = page.reversed().filter { !existing.contains($0.id) }
+            messages.insert(contentsOf: older, at: 0)
+            if messages.count > Self.maxHistory {
+                messages.removeLast(messages.count - Self.maxHistory)
+            }
+            canLoadOlderMessages = page.count == pageSize
             error = nil
         } catch { self.error = "\(error)" }
     }
@@ -73,7 +96,9 @@ final class Store: ObservableObject {
     private func receive(_ m: Message) {
         guard m.channel_id == openChannel, !messages.contains(where: { $0.id == m.id }) else { return }
         messages.append(m)
-        if messages.count > Self.limit { messages.removeFirst(messages.count - Self.limit) }
+        if messages.count > Self.maxHistory {
+            messages.removeFirst(messages.count - Self.maxHistory)
+        }
     }
 }
 
@@ -247,6 +272,26 @@ struct ChatView: View {
             ScrollViewReader { proxy in
                 ScrollView {
                     LazyVStack(alignment: .leading, spacing: 8) {
+                        if store.canLoadOlderMessages {
+                            Button {
+                                let anchor = store.messages.first?.id
+                                Task {
+                                    await store.loadOlderMessages()
+                                    await Task.yield()
+                                    if let anchor {
+                                        proxy.scrollTo(anchor, anchor: .top)
+                                    }
+                                }
+                            } label: {
+                                HStack {
+                                    if store.isLoadingOlderMessages { ProgressView() }
+                                    Text(store.isLoadingOlderMessages ? "Loading…" : "Load older messages")
+                                }
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 8)
+                            }
+                            .disabled(store.isLoadingOlderMessages)
+                        }
                         ForEach(store.messages) { m in
                             Row(message: m).id(m.id)
                         }

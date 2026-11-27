@@ -151,6 +151,27 @@ impl HttpClient {
         .await
     }
 
+    pub async fn messages_before(
+        &self,
+        channel_id: &str,
+        before: &str,
+        limit: u8,
+    ) -> Result<Vec<Message>, Error> {
+        if before.is_empty() || !before.bytes().all(|byte| byte.is_ascii_digit()) {
+            return Err(Error::InvalidInput(
+                "message cursor must be a Discord snowflake".into(),
+            ));
+        }
+        self.get(
+            &format!(
+                "/channels/{channel_id}/messages?limit={}&before={before}",
+                limit.clamp(1, 100)
+            ),
+            Duration::from_secs(5),
+        )
+        .await
+    }
+
     pub async fn send_message(&self, channel_id: &str, content: &str) -> Result<Message, Error> {
         let resp = self
             .client
@@ -187,5 +208,12 @@ mod tests {
 
         client.store_cache("/users/@me", b"stale".to_vec(), Duration::ZERO);
         assert_eq!(client.cached("/users/@me"), None);
+    }
+
+    #[tokio::test]
+    async fn message_history_rejects_non_snowflake_cursor() {
+        let client = HttpClient::new("test-token");
+        let result = client.messages_before("channel", "invalid", 50).await;
+        assert!(matches!(result, Err(Error::InvalidInput(_))));
     }
 }

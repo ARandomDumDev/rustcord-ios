@@ -73,6 +73,9 @@ final class Discord: @unchecked Sendable {
         try await call { rustcord_create_dm($0, recipientID) }
     }
     func messages(_ c: String) async throws -> [Message] { try await call { rustcord_messages($0, c, 50) } }
+    func messages(_ c: String, before: String) async throws -> [Message] {
+        try await call { rustcord_messages_before($0, c, before, 50) }
+    }
     func send(_ c: String, _ text: String) async throws -> Message { try await call { rustcord_send_message($0, c, text) } }
 
     /// Gateway events are delivered on a Rust thread; only MESSAGE_CREATE is decoded.
