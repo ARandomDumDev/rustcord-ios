@@ -1,17 +1,42 @@
 import Foundation
 
-struct User: Codable, Hashable { let id: String; let username: String }
+struct User: Codable, Hashable {
+    let id: String
+    let username: String
+    let avatar: String?
+
+    var avatarURL: URL? {
+        guard let avatar else { return nil }
+        let ext = avatar.hasPrefix("a_") ? "gif" : "png"
+        return URL(string: "https://cdn.discordapp.com/avatars/\(id)/\(avatar).\(ext)?size=64")
+    }
+}
 struct Guild: Codable, Identifiable, Hashable { let id: String; let name: String }
 struct Channel: Codable, Identifiable, Hashable {
     let id: String
     let type: Int
     let name: String?
 }
+struct MessageAttachment: Codable, Identifiable, Hashable {
+    let id: String
+    let filename: String
+    let url: URL
+    let content_type: String?
+
+    var isImage: Bool {
+        if content_type?.lowercased().hasPrefix("image/") == true { return true }
+        return ["png", "jpg", "jpeg", "gif", "webp", "heic", "avif"]
+            .contains(URL(fileURLWithPath: filename).pathExtension.lowercased())
+    }
+}
 struct Message: Codable, Identifiable, Hashable {
     let id: String
     let channel_id: String
     let author: User
     let content: String
+    let attachments: [MessageAttachment]?
+
+    var imageAttachments: [MessageAttachment] { (attachments ?? []).filter(\.isImage) }
 }
 
 struct RustcordError: Error, Decodable { let error: String }

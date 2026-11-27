@@ -1,4 +1,6 @@
 import SwiftUI
+import ImageIO
+import UIKit
 
 /// Keeps only the newest `limit` messages per open channel, so memory stays flat.
 @MainActor
@@ -275,14 +277,107 @@ struct ChatView: View {
     }
 }
 
-/// Plain text only: no avatars or embeds, which keeps rendering cheap and memory low.
+private enum ImageMemoryCache {
+    static let images: NSCache<NSURL, UIImage> = {
+        let cache = NSCache<NSURL, UIImage>()
+        cache.countLimit = 160
+        cache.totalCostLimit = 32 * 1024 * 1024
+        return cache
+    }()
+}
+
+private struct CachedRemoteImage: View {
+    let url: URL?
+    @State private var image: UIImage?
+    @State private var failed = false
+
+    var body: some View {
+        Group {
+            if let image {
+                Image(uiImage: image).resizable().scaledToFit()
+            } else if failed {
+                Image(systemName: "photo").foregroundStyle(.secondary)
+            } else {
+                ProgressView()
+            }
+        }
+        .task(id: url) {
+            image = nil
+            failed = false
+            guard let url else {
+                failed = true
+                return
+            }
+            if let cached = ImageMemoryCache.images.object(forKey: url as NSURL) {
+                image = cached
+                return
+            }
+            do {
+                let (data, response) = try await URLSession.shared.data(from: url)
+                guard (response as? HTTPURLResponse)?.statusCode == 200,
+                      let source = CGImageSourceCreateWithData(data as CFData, nil),
+                      let thumbnail = CGImageSourceCreateThumbnailAtIndex(
+                        source,
+                        0,
+                        [
+                            kCGImageSourceCreateThumbnailFromImageAlways: true,
+                            kCGImageSourceCreateThumbnailWithTransform: true,
+                            kCGImageSourceThumbnailMaxPixelSize: 1200,
+                            kCGImageSourceShouldCache: false,
+                        ] as CFDictionary
+                      ) else {
+                    failed = true
+                    return
+                }
+                let decoded = UIImage(cgImage: thumbnail)
+                ImageMemoryCache.images.setObject(
+                    decoded,
+                    forKey: url as NSURL,
+                    cost: thumbnail.width * thumbnail.height * 4
+                )
+                image = decoded
+            } catch {
+                failed = true
+            }
+        }
+    }
+}
+
 struct Row: View, Equatable {
     let message: Message
     var body: some View {
-        VStack(alignment: .leading, spacing: 2) {
-            Text(message.author.username).font(.caption.bold()).foregroundStyle(.secondary)
-            Text(message.content)
+        HStack(alignment: .top, spacing: 10) {
+            Group {
+                if let url = message.author.avatarURL {
+                    CachedRemoteImage(url: url)
+                } else {
+                    Text(String(message.author.username.prefix(1)).uppercased())
+                        .font(.caption.bold())
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .frame(width: 36, height: 36)
+            .background(.quaternary)
+            .clipShape(Circle())
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text(message.author.username).font(.caption.bold()).foregroundStyle(.secondary)
+                if !message.content.isEmpty {
+                    Text(message.content).textSelection(.enabled)
+                }
+                ForEach(message.imageAttachments) { attachment in
+                    CachedRemoteImage(url: attachment.url)
+                        .frame(maxWidth: 420, maxHeight: 280)
+                        .clipShape(RoundedRectangle(cornerRadius: 10))
+                        .accessibilityLabel(attachment.filename)
+                }
+                ForEach((message.attachments ?? []).filter { !$0.isImage }) { attachment in
+                    Link(attachment.filename, destination: attachment.url)
+                        .font(.footnote)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.vertical, 4)
     }
 }

@@ -1,7 +1,11 @@
 # iOS front end (SwiftUI)
 
 Native SwiftUI UI over the Rust core: `LazyVStack` rows, newest 100 messages kept per channel,
-text-only rows, network/JSON off the main thread.
+network/JSON off the main thread, cached avatars, and image attachments downsampled for display.
+
+Successful REST reads are cached in memory (profile 5 minutes, server/channel lists 1 minute,
+messages 5 seconds) to avoid repeat API requests; sending a message invalidates that channel's
+message cache. Image responses use URLSession caching and a bounded 32 MiB decoded-image cache.
 
 ## Build with GitHub Actions (no Mac needed)
 `.github/workflows/ios.yml` runs on macOS: builds the Rust static libs, generates `rustcord.h` with
