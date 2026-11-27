@@ -64,19 +64,29 @@ pub extern "C" fn rustcord_guilds(c: *const RustcordClient) -> *mut c_char {
 }
 
 #[no_mangle]
-pub extern "C" fn rustcord_guild_channels(c: *const RustcordClient, guild_id: *const c_char) -> *mut c_char {
+pub extern "C" fn rustcord_guild_channels(
+    c: *const RustcordClient,
+    guild_id: *const c_char,
+) -> *mut c_char {
     let c = unsafe { &*c };
     json_result(rt().block_on(c.0.guild_channels(&arg(guild_id))))
 }
 
 #[no_mangle]
-pub extern "C" fn rustcord_create_dm(c: *const RustcordClient, recipient_id: *const c_char) -> *mut c_char {
+pub extern "C" fn rustcord_create_dm(
+    c: *const RustcordClient,
+    recipient_id: *const c_char,
+) -> *mut c_char {
     let c = unsafe { &*c };
     json_result(rt().block_on(c.0.create_dm(&arg(recipient_id))))
 }
 
 #[no_mangle]
-pub extern "C" fn rustcord_messages(c: *const RustcordClient, channel_id: *const c_char, limit: u8) -> *mut c_char {
+pub extern "C" fn rustcord_messages(
+    c: *const RustcordClient,
+    channel_id: *const c_char,
+    limit: u8,
+) -> *mut c_char {
     let c = unsafe { &*c };
     json_result(rt().block_on(c.0.messages(&arg(channel_id), limit)))
 }
@@ -91,7 +101,8 @@ pub extern "C" fn rustcord_send_message(
     json_result(rt().block_on(c.0.send_message(&arg(channel_id), &arg(content))))
 }
 
-pub type EventCallback = extern "C" fn(user_data: *mut std::ffi::c_void, name: *const c_char, json: *const c_char);
+pub type EventCallback =
+    extern "C" fn(user_data: *mut std::ffi::c_void, name: *const c_char, json: *const c_char);
 
 struct SendPtr(*mut std::ffi::c_void);
 unsafe impl Send for SendPtr {}
@@ -99,7 +110,11 @@ unsafe impl Send for SendPtr {}
 /// Starts the gateway in the background; `cb` is invoked on a Rust thread for
 /// every dispatch event. The name/json pointers are only valid during the call.
 #[no_mangle]
-pub extern "C" fn rustcord_gateway_start(token: *const c_char, cb: EventCallback, user_data: *mut std::ffi::c_void) {
+pub extern "C" fn rustcord_gateway_start(
+    token: *const c_char,
+    cb: EventCallback,
+    user_data: *mut std::ffi::c_void,
+) {
     let token = arg(token);
     let ud = SendPtr(user_data);
     rt().spawn(async move {
